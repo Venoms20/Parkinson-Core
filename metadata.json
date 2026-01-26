@@ -1,0 +1,5 @@
+{
+  "name": "Parkinson Care",
+  "description": "An application to help Parkinson's patients manage medications, appointments, and daily well-being with reminders and health tips.",
+  "requestFramePermissions": []
+}
