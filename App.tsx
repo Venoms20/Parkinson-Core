@@ -11,6 +11,7 @@ import Diary from './components/Diary';
 import HealthTipModal from './components/HealthTipModal';
 import NotificationPermission from './components/NotificationPermission';
 import SplashScreen from './components/SplashScreen';
+import { playAlarmSound } from './utils/sound';
 
 const App: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
@@ -45,6 +46,7 @@ const App: React.FC = () => {
           body: `Hora de tomar seu remédio: ${med.name} (${med.dosage})`,
           icon: '/icon.svg',
         });
+        playAlarmSound();
       }
     });
 
@@ -54,6 +56,7 @@ const App: React.FC = () => {
           body: `Você tem uma consulta agora: ${appt.title} em ${appt.location}`,
            icon: '/icon.svg',
         });
+        playAlarmSound();
       }
     });
     
