@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { Page, Patient, Medication, Appointment, DiaryEntry } from './types';
@@ -13,7 +13,7 @@ import HealthTipModal from './components/HealthTipModal';
 import NotificationPermission from './components/NotificationPermission';
 import SplashScreen from './components/SplashScreen';
 import AlarmOverlay from './components/AlarmOverlay';
-import { playAlarmSound } from './utils/sound';
+import { startAlarmLoop, stopAlarmLoop } from './utils/sound';
 
 const App: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
@@ -28,9 +28,10 @@ const App: React.FC = () => {
   const [lastTipDate, setLastTipDate] = useLocalStorage<string | null>('lastTipDate', null);
   const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
 
-  // Estados para o sistema de alarme ativo
   const [activeAlarms, setActiveAlarms] = useState<{meds: Medication[], appts: Appointment[]} | null>(null);
   const [lastNotifiedMinute, setLastNotifiedMinute] = useState<string | null>(null);
+  
+  const wakeLockRef = useRef<any>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -39,45 +40,53 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Gerencia o bloqueio de descanso da tela
+  const requestWakeLock = async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+      } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+      }
+    }
+  };
+
+  const releaseWakeLock = () => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release();
+      wakeLockRef.current = null;
+    }
+  };
+
   const checkAlarms = useCallback(async () => {
     const now = new Date();
     const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const today = now.toISOString().split('T')[0];
 
-    // Evita disparar o alarme múltiplas vezes no mesmo minuto
     if (currentTime === lastNotifiedMinute) return;
 
-    // Filtra medicamentos habilitados para o horário atual
     const medsToTake = medications.filter(med => med.enabled && med.time === currentTime);
-    
-    // Filtra consultas habilitadas para hoje no horário atual
     const apptsNow = appointments.filter(appt => appt.enabled && appt.date === today && appt.time === currentTime);
 
     if (medsToTake.length > 0 || apptsNow.length > 0) {
       setLastNotifiedMinute(currentTime);
       setActiveAlarms({ meds: medsToTake, appts: apptsNow });
       
-      // Toca som e tenta enviar notificação push
-      playAlarmSound();
+      // Inicia som e bloqueia tela
+      startAlarmLoop();
+      requestWakeLock();
       
       if (notificationPermission === 'granted') {
-        const medNames = medsToTake.map(m => m.name).join(', ');
-        const apptNames = apptsNow.map(a => a.title).join(', ');
-        const body = [
-            medNames ? `Remédios: ${medNames}` : null,
-            apptNames ? `Consultas: ${apptNames}` : null
-        ].filter(Boolean).join(' | ');
-
-        new Notification('Lembrete Parkinson Care', {
-          body: body,
+        new Notification('🚨 HORA DO REMÉDIO! 🚨', {
+          body: 'Abra o aplicativo agora para confirmar sua dose.',
           icon: '/icon.svg',
-          tag: 'alarm-' + currentTime, // Agrupa notificações do mesmo minuto
-          requireInteraction: true
+          tag: 'critical-alarm',
+          requireInteraction: true,
+          silent: false, // Tenta forçar som do sistema
         });
       }
     }
 
-    // Lógica da dica de saúde (dispara na primeira medicação do dia)
     const firstMedicationTime = medications
       .filter(m => m.enabled)
       .map(m => m.time)
@@ -89,7 +98,7 @@ const App: React.FC = () => {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: 'Dê uma dica de saúde curta, simples e encorajadora para uma pessoa com doença de Parkinson. Concentre-se em exercício, dieta, bem-estar mental ou gerenciamento de sintomas. Máximo 40 palavras.',
+                contents: 'Dê uma dica de saúde curta e encorajadora para Parkinson. Máximo 30 palavras.',
             });
             const tip = response.text;
             if (tip) {
@@ -97,19 +106,24 @@ const App: React.FC = () => {
               setLastTipDate(today);
             }
         } catch (error) {
-            setHealthTip("Lembre-se de se manter hidratado e fazer alongamentos leves hoje. Pequenos passos fazem uma grande diferença!");
+            setHealthTip("Lembre-se de beber água regularmente.");
             setLastTipDate(today);
         } finally {
             setIsTipLoading(false);
         }
     }
-
   }, [notificationPermission, medications, appointments, lastTipDate, setLastTipDate, lastNotifiedMinute, healthTip]);
 
   useEffect(() => {
-    const interval = setInterval(checkAlarms, 10000); // Checa a cada 10 segundos para maior precisão
+    const interval = setInterval(checkAlarms, 5000); // Checa mais frequentemente (5s)
     return () => clearInterval(interval);
   }, [checkAlarms]);
+
+  const handleDismissAlarm = () => {
+    stopAlarmLoop();
+    releaseWakeLock();
+    setActiveAlarms(null);
+  };
 
   const renderPage = () => {
     switch (currentPage) {
@@ -146,17 +160,15 @@ const App: React.FC = () => {
       </main>
       <BottomNav currentPage={currentPage} setCurrentPage={setCurrentPage} />
       
-      {/* Alerta de Saúde do Dia */}
       {healthTip && (
         <HealthTipModal tip={healthTip} isLoading={isTipLoading} onClose={() => setHealthTip(null)} />
       )}
 
-      {/* Overlay de Alarme Ativo */}
       {activeAlarms && (
         <AlarmOverlay 
           meds={activeAlarms.meds} 
           appointments={activeAlarms.appts} 
-          onDismiss={() => setActiveAlarms(null)} 
+          onDismiss={handleDismissAlarm} 
         />
       )}
     </div>
