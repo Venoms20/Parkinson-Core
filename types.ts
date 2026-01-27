@@ -1,4 +1,4 @@
-export type Page = 'PROFILE' | 'MEDS' | 'APPOINTMENTS' | 'DIARY';
+export type Page = 'PROFILE' | 'MEDS' | 'APPOINTMENTS' | 'DIARY' | 'MESSAGE';
 
 export interface Patient {
   name: string;
