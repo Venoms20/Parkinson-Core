@@ -12,6 +12,7 @@ import MessagePage from './components/MessagePage';
 import HealthTipModal from './components/HealthTipModal';
 import NotificationPermission from './components/NotificationPermission';
 import SplashScreen from './components/SplashScreen';
+import AlarmOverlay from './components/AlarmOverlay';
 import { playAlarmSound } from './utils/sound';
 
 const App: React.FC = () => {
@@ -27,53 +28,68 @@ const App: React.FC = () => {
   const [lastTipDate, setLastTipDate] = useLocalStorage<string | null>('lastTipDate', null);
   const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
 
+  // Estados para o sistema de alarme ativo
+  const [activeAlarms, setActiveAlarms] = useState<{meds: Medication[], appts: Appointment[]} | null>(null);
+  const [lastNotifiedMinute, setLastNotifiedMinute] = useState<string | null>(null);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 2500); // Exibe a splash screen por 2.5 segundos
+    }, 2500);
     return () => clearTimeout(timer);
   }, []);
 
   const checkAlarms = useCallback(async () => {
-    if (notificationPermission !== 'granted') return;
-
     const now = new Date();
     const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const today = now.toISOString().split('T')[0];
 
-    // Agrupa medicamentos por horário
+    // Evita disparar o alarme múltiplas vezes no mesmo minuto
+    if (currentTime === lastNotifiedMinute) return;
+
+    // Filtra medicamentos habilitados para o horário atual
     const medsToTake = medications.filter(med => med.enabled && med.time === currentTime);
-    if (medsToTake.length > 0) {
-      const medList = medsToTake.map(m => `${m.name} (${m.dosage})`).join(', ');
-      new Notification('Lembrete de Medicamento', {
-        body: `Hora de tomar: ${medList}`,
-        icon: '/icon.svg',
-      });
+    
+    // Filtra consultas habilitadas para hoje no horário atual
+    const apptsNow = appointments.filter(appt => appt.enabled && appt.date === today && appt.time === currentTime);
+
+    if (medsToTake.length > 0 || apptsNow.length > 0) {
+      setLastNotifiedMinute(currentTime);
+      setActiveAlarms({ meds: medsToTake, appts: apptsNow });
+      
+      // Toca som e tenta enviar notificação push
       playAlarmSound();
+      
+      if (notificationPermission === 'granted') {
+        const medNames = medsToTake.map(m => m.name).join(', ');
+        const apptNames = apptsNow.map(a => a.title).join(', ');
+        const body = [
+            medNames ? `Remédios: ${medNames}` : null,
+            apptNames ? `Consultas: ${apptNames}` : null
+        ].filter(Boolean).join(' | ');
+
+        new Notification('Lembrete Parkinson Care', {
+          body: body,
+          icon: '/icon.svg',
+          tag: 'alarm-' + currentTime, // Agrupa notificações do mesmo minuto
+          requireInteraction: true
+        });
+      }
     }
 
-    appointments.forEach(appt => {
-      if (appt.enabled && appt.date === today && appt.time === currentTime) {
-        new Notification('Lembrete de Consulta', {
-          body: `Você tem uma consulta agora: ${appt.title} em ${appt.location}`,
-           icon: '/icon.svg',
-        });
-        playAlarmSound();
-      }
-    });
-    
+    // Lógica da dica de saúde (dispara na primeira medicação do dia)
     const firstMedicationTime = medications
       .filter(m => m.enabled)
       .map(m => m.time)
       .sort()[0];
 
-    if (firstMedicationTime === currentTime && lastTipDate !== today) {
+    if (firstMedicationTime === currentTime && lastTipDate !== today && !healthTip) {
         setIsTipLoading(true);
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: 'Dê uma dica de saúde curta, simples e encorajadora para uma pessoa com doença de Parkinson. Concentre-se em um tópico como exercício, dieta, bem-estar mental ou gerenciamento de sintomas. Mantenha-a com menos de 50 palavras e em português.',
+                contents: 'Dê uma dica de saúde curta, simples e encorajadora para uma pessoa com doença de Parkinson. Concentre-se em exercício, dieta, bem-estar mental ou gerenciamento de sintomas. Máximo 40 palavras.',
             });
             const tip = response.text;
             if (tip) {
@@ -81,7 +97,6 @@ const App: React.FC = () => {
               setLastTipDate(today);
             }
         } catch (error) {
-            console.error("Erro ao buscar dica de saúde:", error);
             setHealthTip("Lembre-se de se manter hidratado e fazer alongamentos leves hoje. Pequenos passos fazem uma grande diferença!");
             setLastTipDate(today);
         } finally {
@@ -89,15 +104,11 @@ const App: React.FC = () => {
         }
     }
 
-  }, [notificationPermission, medications, appointments, lastTipDate, setLastTipDate]);
+  }, [notificationPermission, medications, appointments, lastTipDate, setLastTipDate, lastNotifiedMinute, healthTip]);
 
   useEffect(() => {
-    // Sets up alarm checker
-    const interval = setInterval(checkAlarms, 60000); // Check every minute
-    
-    return () => {
-      clearInterval(interval);
-    };
+    const interval = setInterval(checkAlarms, 10000); // Checa a cada 10 segundos para maior precisão
+    return () => clearInterval(interval);
   }, [checkAlarms]);
 
   const renderPage = () => {
@@ -125,17 +136,28 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen font-sans">
+    <div className="flex flex-col h-screen font-sans bg-base-100 overflow-hidden">
       <Header page={currentPage} patient={patient}/>
-      <main className="flex-grow overflow-y-auto p-4 pb-24 bg-base-100">
-        {notificationPermission !== 'granted' && (
+      <main className="flex-grow overflow-y-auto p-4 pb-24 relative">
+        {notificationPermission !== 'granted' && currentPage === 'MEDS' && (
              <NotificationPermission onPermissionUpdate={handlePermissionUpdate} />
         )}
         {renderPage()}
       </main>
       <BottomNav currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      
+      {/* Alerta de Saúde do Dia */}
       {healthTip && (
         <HealthTipModal tip={healthTip} isLoading={isTipLoading} onClose={() => setHealthTip(null)} />
+      )}
+
+      {/* Overlay de Alarme Ativo */}
+      {activeAlarms && (
+        <AlarmOverlay 
+          meds={activeAlarms.meds} 
+          appointments={activeAlarms.appts} 
+          onDismiss={() => setActiveAlarms(null)} 
+        />
       )}
     </div>
   );
