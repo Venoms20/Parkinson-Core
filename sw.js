@@ -21,7 +21,9 @@ const URLS_TO_CACHE = [
   '/components/NotificationPermission.tsx',
   '/components/Icons.tsx',
   '/components/SplashScreen.tsx',
-  '/components/MedicationCard.tsx'
+  '/components/MedicationCard.tsx',
+  '/components/MessagePage.tsx',
+  '/components/ToggleSwitch.tsx'
 ];
 
 // Instala o service worker
