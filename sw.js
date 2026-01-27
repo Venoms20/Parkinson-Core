@@ -1,4 +1,4 @@
-const CACHE_NAME = 'parkinson-care-v1';
+const CACHE_NAME = 'parkinson-care-v2';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -6,67 +6,82 @@ const URLS_TO_CACHE = [
   '/manifest.json',
   '/index.tsx',
   '/App.tsx',
-  '/types.ts',
-  '/hooks/useLocalStorage.ts',
-  '/utils/haptic.ts',
   '/utils/sound.ts',
-  '/components/Header.tsx',
-  '/components/BottomNav.tsx',
-  '/components/PatientProfile.tsx',
-  '/components/MedicationList.tsx',
-  '/components/AppointmentList.tsx',
-  '/components/Diary.tsx',
-  '/components/Modal.tsx',
-  '/components/HealthTipModal.tsx',
-  '/components/NotificationPermission.tsx',
-  '/components/Icons.tsx',
-  '/components/SplashScreen.tsx',
-  '/components/MedicationCard.tsx',
-  '/components/MessagePage.tsx',
-  '/components/ToggleSwitch.tsx'
+  '/components/AlarmOverlay.tsx'
 ];
 
-// Instala o service worker
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Cache aberto');
-        return cache.addAll(URLS_TO_CACHE);
-      })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE))
   );
+  self.skipWaiting();
 });
 
-// Responde às solicitações com uma estratégia network-first
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      // Se a rede falhar, tenta buscar no cache
-      return caches.match(event.request).then(response => {
-        if (response) {
-          return response;
-        }
-        // Para requisições de navegação, retorna a página principal em cache se nada for encontrado
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
-        }
-      });
-    })
-  );
-});
-
-// Atualiza o service worker e limpa caches antigos
 self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
+    caches.keys().then(keys => Promise.all(
+      keys.map(key => key !== CACHE_NAME ? caches.delete(key) : null)
+    ))
+  );
+  self.clients.claim();
+});
+
+// Listener para mensagens do App (ex: agendar notificação ou disparar imediato)
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'TRIGGER_ALARM') {
+    const { meds, appts } = event.data.payload;
+    
+    let bodyText = '';
+    if (meds.length > 0) {
+      bodyText += 'REMÉDIOS: ' + meds.map(m => `${m.name} (${m.dosage})`).join(', ');
+    }
+    if (appts.length > 0) {
+      bodyText += (bodyText ? ' | ' : '') + 'CONSULTAS: ' + appts.map(a => a.title).join(', ');
+    }
+
+    const options = {
+      body: bodyText,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 500],
+      tag: 'medication-alarm',
+      renotify: true,
+      requireInteraction: true, // Mantém a notificação até o usuário interagir
+      priority: 2, // Alta prioridade (Android)
+      actions: [
+        { action: 'confirm', title: '✅ Tomei Agora', icon: '/icon.svg' },
+        { action: 'open', title: '📂 Abrir App' }
+      ],
+      data: {
+        url: self.registration.scope
+      }
+    };
+
+    event.waitUntil(
+      self.registration.showNotification('🚨 HORA DO SEU CUIDADO! 🚨', options)
+    );
+  }
+});
+
+// Lida com cliques na notificação
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+
+  if (event.action === 'confirm') {
+    // Aqui poderíamos atualizar o localStorage via IndexedDB se necessário
+    // Por enquanto, apenas abre o app para o estado atualizado
+  }
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url === event.notification.data.url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(event.notification.data.url);
+      }
     })
   );
 });
