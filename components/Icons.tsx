@@ -13,7 +13,10 @@ const iconProps = {
 export const AppIcon = () => (
   <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="256" cy="256" r="256" fill="hsl(216, 18%, 13%)"/>
-    <path d="M256 128C298.113 128 332.5 160.887 332.5 201.5C332.5 228.625 319.438 252.25 299.125 266.313C306.938 274.625 311.5 285.375 311.5 297C311.5 318.563 294.125 336 273.5 336C269.375 336 265.5 335.313 262 334.375C251.5 348.688 233.125 359.5 212 359.5C178.625 359.5 151.5 332.625 151.5 299.5C151.5 274.188 167.313 252.5 188.875 244.438C183.125 237.313 179.5 228.125 179.5 218C179.5 192.813 200.125 172.5 225.5 172.5C241.125 172.5 254.875 180.313 263.375 191.375C270.125 188.688 277.375 187 285 187C281.875 153.375 256 128 256 128Z" stroke="hsl(198, 93%, 60%)" strokeWidth="12"/>
+    <path d="M256 120C190 120 140 170 140 236C140 266 155 293 178 310C170 320 165 332 165 345C165 375 189 400 219 400C235 400 249 392 256 380C263 392 277 400 293 400C323 400 347 375 347 345C347 332 342 320 334 310C357 293 372 266 372 236C372 170 322 120 256 120Z" stroke="hsl(198, 93%, 60%)" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M256 120V380" stroke="hsl(198, 93%, 60%)" strokeWidth="8" strokeDasharray="1 15" strokeLinecap="round"/>
+    <path d="M210 180C190 190 180 210 180 230" stroke="hsl(198, 93%, 60%)" strokeWidth="10" strokeLinecap="round"/>
+    <path d="M302 180C322 190 332 210 332 230" stroke="hsl(198, 93%, 60%)" strokeWidth="10" strokeLinecap="round"/>
   </svg>
 );
 
@@ -35,7 +38,7 @@ export const BookOpenIcon = () => (
 );
 
 export const PlusIcon = () => (
-  <svg {...iconProps} className="w-8 h-8"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+  <svg {...iconProps} className="w-8 h-8"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" x2="12" y2="19"></line></svg>
 );
 
 export const TrashIcon = () => (
