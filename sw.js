@@ -9,6 +9,7 @@ const URLS_TO_CACHE = [
   '/types.ts',
   '/hooks/useLocalStorage.ts',
   '/utils/haptic.ts',
+  '/utils/sound.ts',
   '/components/Header.tsx',
   '/components/BottomNav.tsx',
   '/components/PatientProfile.tsx',
