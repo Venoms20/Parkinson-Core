@@ -8,6 +8,7 @@ import PatientProfile from './components/PatientProfile';
 import MedicationList from './components/MedicationList';
 import AppointmentList from './components/AppointmentList';
 import Diary from './components/Diary';
+import MessagePage from './components/MessagePage';
 import HealthTipModal from './components/HealthTipModal';
 import NotificationPermission from './components/NotificationPermission';
 import SplashScreen from './components/SplashScreen';
@@ -40,15 +41,16 @@ const App: React.FC = () => {
     const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const today = now.toISOString().split('T')[0];
 
-    medications.forEach(med => {
-      if (med.enabled && med.time === currentTime) {
-        new Notification('Lembrete de Medicamento', {
-          body: `Hora de tomar seu remédio: ${med.name} (${med.dosage})`,
-          icon: '/icon.svg',
-        });
-        playAlarmSound();
-      }
-    });
+    // Agrupa medicamentos por horário
+    const medsToTake = medications.filter(med => med.enabled && med.time === currentTime);
+    if (medsToTake.length > 0) {
+      const medList = medsToTake.map(m => `${m.name} (${m.dosage})`).join(', ');
+      new Notification('Lembrete de Medicamento', {
+        body: `Hora de tomar: ${medList}`,
+        icon: '/icon.svg',
+      });
+      playAlarmSound();
+    }
 
     appointments.forEach(appt => {
       if (appt.enabled && appt.date === today && appt.time === currentTime) {
@@ -106,6 +108,8 @@ const App: React.FC = () => {
         return <Diary diaryEntries={diaryEntries} setDiaryEntries={setDiaryEntries} />;
       case 'PROFILE':
         return <PatientProfile patient={patient} setPatient={setPatient} />;
+      case 'MESSAGE':
+        return <MessagePage />;
       case 'MEDS':
       default:
         return <MedicationList medications={medications} setMedications={setMedications} />;
