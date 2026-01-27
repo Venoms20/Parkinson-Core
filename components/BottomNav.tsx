@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { UserIcon, PillIcon, CalendarIcon, BookOpenIcon } from './Icons';
+import { UserIcon, PillIcon, CalendarIcon, BookOpenIcon, SparklesIcon } from './Icons';
 import { triggerHaptic } from '../utils/haptic';
 
 interface BottomNavProps {
@@ -40,6 +40,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentPage, setCurrentPage }) =>
   const navItems = [
     { page: 'MEDS' as Page, label: 'Remédios', icon: <PillIcon /> },
     { page: 'APPOINTMENTS' as Page, label: 'Consultas', icon: <CalendarIcon /> },
+    { page: 'MESSAGE' as Page, label: 'Mensagem', icon: <SparklesIcon /> },
     { page: 'DIARY' as Page, label: 'Diário', icon: <BookOpenIcon /> },
     { page: 'PROFILE' as Page, label: 'Perfil', icon: <UserIcon /> },
   ];
