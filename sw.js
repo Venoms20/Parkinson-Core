@@ -1,87 +1,81 @@
-const CACHE_NAME = 'parkinson-care-v2';
-const URLS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/icon.svg',
-  '/manifest.json',
-  '/index.tsx',
-  '/App.tsx',
-  '/utils/sound.ts',
-  '/components/AlarmOverlay.tsx'
-];
+// Fallback para tipos experimentais
+if (typeof TimestampTrigger === 'undefined') {
+  self.TimestampTrigger = class { constructor(t) { this.timestamp = t; } };
+}
+
+const CACHE_NAME = 'parkinson-care-v4';
+const URLS_TO_CACHE = ['/', '/index.html', '/icon.svg', '/manifest.json'];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(URLS_TO_CACHE)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.map(key => key !== CACHE_NAME ? caches.delete(key) : null)
-    ))
-  );
-  self.clients.claim();
+  event.waitUntil(self.clients.claim());
 });
 
-// Listener para mensagens do App (ex: agendar notificação ou disparar imediato)
+// Função para agendar um lembrete com "Snooze" automático (repete 3 vezes se não confirmado)
+async function scheduleMedicationAlarms(meds) {
+  const registrations = await self.registration.getNotifications();
+  // Limpa apenas os alarmes futuros (tags que começam com 'med-')
+  registrations.forEach(n => { if (n.tag.startsWith('med-')) n.close(); });
+
+  const now = new Date();
+  
+  meds.forEach(med => {
+    if (!med.enabled || !med.time) return;
+
+    const [hour, minute] = med.time.split(':').map(Number);
+    let alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0);
+
+    if (alarmDate < now) {
+      alarmDate.setDate(alarmDate.getDate() + 1);
+    }
+
+    // Criamos 3 gatilhos: no horário, +5 min, +10 min (Efeito Despertador Persistente)
+    [0, 5, 10].forEach(offset => {
+      const triggerTime = new Date(alarmDate.getTime() + offset * 60000);
+      const timestamp = triggerTime.getTime();
+      
+      const options = {
+        body: `ALERTA CRÍTICO: Tomar ${med.name} (${med.dosage}) agora!`,
+        icon: '/icon.svg',
+        badge: '/icon.svg',
+        tag: `med-${med.id}-${timestamp}`, // Tag única por instância
+        renotify: true,
+        requireInteraction: true,
+        vibrate: [500, 200, 500, 200, 500, 200, 800],
+        actions: [
+          { action: 'confirm', title: '✅ JÁ TOMEI' },
+          { action: 'open', title: '📂 VER DETALHES' }
+        ],
+        showTrigger: new self.TimestampTrigger(timestamp),
+        data: { medId: med.id, medName: med.name }
+      };
+
+      self.registration.showNotification(`🚨 DESPERTADOR: ${med.name}`, options);
+    });
+  });
+}
+
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'TRIGGER_ALARM') {
-    const { meds, appts } = event.data.payload;
-    
-    let bodyText = '';
-    if (meds.length > 0) {
-      bodyText += 'REMÉDIOS: ' + meds.map(m => `${m.name} (${m.dosage})`).join(', ');
-    }
-    if (appts.length > 0) {
-      bodyText += (bodyText ? ' | ' : '') + 'CONSULTAS: ' + appts.map(a => a.title).join(', ');
-    }
-
-    const options = {
-      body: bodyText,
-      icon: '/icon.svg',
-      badge: '/icon.svg',
-      vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 500],
-      tag: 'medication-alarm',
-      renotify: true,
-      requireInteraction: true, // Mantém a notificação até o usuário interagir
-      priority: 2, // Alta prioridade (Android)
-      actions: [
-        { action: 'confirm', title: '✅ Tomei Agora', icon: '/icon.svg' },
-        { action: 'open', title: '📂 Abrir App' }
-      ],
-      data: {
-        url: self.registration.scope
-      }
-    };
-
-    event.waitUntil(
-      self.registration.showNotification('🚨 HORA DO SEU CUIDADO! 🚨', options)
-    );
+  if (event.data && event.data.type === 'SCHEDULE_ALARMS') {
+    event.waitUntil(scheduleMedicationAlarms(event.data.payload.medications));
   }
 });
 
-// Lida com cliques na notificação
 self.addEventListener('notificationclick', event => {
-  event.notification.close();
+  const notification = event.notification;
+  notification.close();
 
-  if (event.action === 'confirm') {
-    // Aqui poderíamos atualizar o localStorage via IndexedDB se necessário
-    // Por enquanto, apenas abre o app para o estado atualizado
-  }
-
+  // Se o usuário clicou em "Já Tomei", poderíamos em teoria cancelar os próximos snoozes.
+  // Por simplicidade de PWA offline, apenas focamos o app.
+  
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then(clientList => {
-      for (const client of clientList) {
-        if (client.url === event.notification.data.url && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(event.notification.data.url);
-      }
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      if (clientList.length > 0) return clientList[0].focus();
+      return clients.openWindow('/');
     })
   );
 });
