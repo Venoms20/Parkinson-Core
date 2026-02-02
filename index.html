@@ -5,117 +5,165 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parkinson Care - Alarmes</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #333; padding: 20px; display: flex; justify-content: center; }
-        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; }
-        h2 { color: #2c5282; text-align: center; margin-bottom: 20px; }
-        label { font-size: 0.9em; color: #718096; font-weight: bold; }
-        input { width: 100%; padding: 12px; margin: 8px 0 20px 0; border: 2px solid #e2e8f0; border-radius: 10px; box-sizing: border-box; font-size: 16px; }
-        button { width: 100%; background: #4299e1; color: white; border: none; padding: 15px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
-        .lista-container { margin-top: 30px; border-top: 2px solid #edf2f7; padding-top: 20px; }
-        .item { background: #ebf8ff; padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #4299e1; }
-        .hora { font-weight: bold; color: #2b6cb0; font-size: 1.1em; }
-        .btn-delete { background: #fc8181; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+        /* Design Minimalista e Acessível */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .app-container {
+            background: white;
+            padding: 20px;
+            border-radius: 25px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h2 { color: #2c3e50; text-align: center; margin-bottom: 25px; }
+
+        .input-group { margin-bottom: 15px; }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            margin-top: 5px;
+            border: 2px solid #edf2f7;
+            border-radius: 12px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        button.btn-add {
+            width: 100%;
+            padding: 15px;
+            background-color: #48bb78;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button.btn-add:hover { background-color: #38a169; }
+
+        .lista-remedios { margin-top: 30px; }
+
+        .card-remedio {
+            background: #fff;
+            border-left: 6px solid #48bb78;
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .info hstrong { display: block; font-size: 18px; color: #2d3748; }
+        .info span { color: #718096; font-weight: bold; }
+
+        .btn-delete {
+            background: #feb2b2;
+            color: #c53030;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
-<audio id="somAlarme" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+<div class="app-container">
+    <h2>💊 Parkinson Care</h2>
+    
+    <div class="input-group">
+        <input type="text" id="nomeRemedio" placeholder="Nome do Medicamento">
+    </div>
+    <div class="input-group">
+        <input type="time" id="horaRemedio">
+    </div>
+    
+    <button class="btn-add" onclick="adicionar()">Salvar Alarme</button>
 
-<div class="card">
-    <h2>Parkinson Care</h2>
-    <label>Nome do Medicamento</label>
-    <input type="text" id="nome" placeholder="Ex: Prolopa">
-    <label>Horário da Dose</label>
-    <input type="time" id="hora">
-    <button onclick="adicionar()">Agendar Agora</button>
-    <div class="lista-container" id="lista"></div>
+    <div id="lista" class="lista-remedios"></div>
 </div>
 
+<audio id="alarmeSom" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" preload="auto"></audio>
+
 <script>
-    const som = document.getElementById('somAlarme');
+    let medicamentos = JSON.parse(localStorage.getItem('medicamentos')) || [];
 
     function adicionar() {
-        const nome = document.getElementById('nome').value;
-        const hora = document.getElementById('hora').value;
-        if(!nome || !hora) return alert("Preencha tudo!");
+        const nome = document.getElementById('nomeRemedio').value;
+        const hora = document.getElementById('horaRemedio').value;
 
-        const lista = JSON.parse(localStorage.getItem('meds') || '[]');
-        lista.push({ nome, hora, notificado: false });
-        localStorage.setItem('meds', JSON.stringify(lista));
-        
-        document.getElementById('nome').value = '';
-        document.getElementById('hora').value = '';
-        render();
-        som.play().then(() => som.pause()); 
+        if (nome && hora) {
+            const novo = { nome, hora, notificado: false };
+            medicamentos.push(novo);
+            salvarERenderizar();
+            document.getElementById('nomeRemedio').value = '';
+            document.getElementById('horaRemedio').value = '';
+        } else {
+            alert("Por favor, preencha o nome e o horário.");
+        }
     }
 
     function remover(index) {
-        let lista = JSON.parse(localStorage.getItem('meds') || '[]');
-        lista.splice(index, 1);
-        localStorage.setItem('meds', JSON.stringify(lista));
-        render();
+        medicamentos.splice(index, 1);
+        salvarERenderizar();
     }
 
-    function render() {
-        const lista = JSON.parse(localStorage.getItem('meds') || '[]');
-        const container = document.getElementById('lista');
-        container.innerHTML = lista.map((m, index) => `
-            <div class="item">
-                <div>
-                    <div class="nome-med">${m.nome}</div>
-                    <div class="hora">${m.hora}</div>
+    function salvarERenderizar() {
+        localStorage.setItem('medicamentos', JSON.stringify(medicamentos));
+        renderizar();
+    }
+
+    function renderizar() {
+        const listaElemento = document.getElementById('lista');
+        listaElemento.innerHTML = medicamentos.map((m, i) => `
+            <div class="card-remedio">
+                <div class="info">
+                    <strong>${m.nome}</strong>
+                    <span>⏰ ${m.hora}</span>
                 </div>
-                <button class="btn-delete" onclick="remover(${index})">Excluir</button>
+                <button class="btn-delete" onclick="remover(${i})">Excluir</button>
             </div>
-        `).join('') || "<p style='text-align:center; color:#a0aec0;'>Nenhum agendamento.</p>";
+        `).join('');
     }
 
+    // Sistema de Verificação de Alarme
     setInterval(() => {
-        const agora = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
-        let lista = JSON.parse(localStorage.getItem('meds') || '[]');
-        let mudou = false;
-
-        lista.forEach(m => {
-            if(m.hora === agora && !m.notificado) {
-                som.play().catch(() => {});
-                alert(`🔔 HORA DA DOSE: ${m.nome}`);
-                m.notificado = true;
-                mudou = true;
+        const agora = new Error().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }).slice(0, 5);
+        
+        medicamentos.forEach(m => {
+            if (m.hora === agora && !m.notificado) {
+                const som = document.getElementById('alarmeSom');
+                som.play().catch(e => console.log("Erro ao tocar som: " + e));
+                
+                alert(`🔔 HORA DO REMÉDIO: ${m.nome}`);
+                m.notificado = true; // Impede que o alerta repita no mesmo minuto
+                salvarERenderizar();
             }
-            if(m.hora !== agora) m.notificado = false;
+            
+            // Reseta a notificação após o minuto passar
+            if (m.hora !== agora) {
+                m.notificado = false;
+            }
         });
+    }, 1000);
 
-        if(mudou) localStorage.setItem('meds', JSON.stringify(lista));
-    }, 10000);
-
-    render();
+    renderizar();
 </script>
+
 </body>
-</html>
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
-  }
-}
-</script>
-</head>
-  <body class="bg-base-100 text-neutral antialiased">
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('SW registered: ', registration);
-          }).catch(registrationError => {
-            console.log('SW registration failed: ', registrationError);
-          });
-        });
-      }
-    </script>
-  </body>
 </html>
