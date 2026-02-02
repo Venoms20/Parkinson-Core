@@ -1,17 +1,26 @@
+
 {
-  "name": "Parkinson Care",
+  "name": "Parkinson Care - Alarme Inteligente",
   "short_name": "ParkinsonCare",
-  "description": "An application to help Parkinson's patients manage medications, appointments, and daily well-being with reminders and health tips.",
+  "description": "Gestão de medicamentos com alarmes persistentes para Parkinson.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#182330",
-  "theme_color": "#182330",
-  "orientation": "portrait-primary",
+  "background_color": "#101828",
+  "theme_color": "#dc2626",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Meus Remédios",
+      "url": "/?page=MEDS",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
     }
   ]
 }
