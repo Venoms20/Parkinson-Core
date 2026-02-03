@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GoogleGenAI } from '@google/genai';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { Page, Patient, Medication, Appointment, DiaryEntry } from './types';
 import Header from './components/Header';
@@ -9,7 +8,6 @@ import MedicationList from './components/MedicationList';
 import AppointmentList from './components/AppointmentList';
 import Diary from './components/Diary';
 import MessagePage from './components/MessagePage';
-import HealthTipModal from './components/HealthTipModal';
 import NotificationPermission from './components/NotificationPermission';
 import SplashScreen from './components/SplashScreen';
 import AlarmOverlay from './components/AlarmOverlay';
@@ -22,13 +20,10 @@ const App: React.FC = () => {
   const [medications, setMedications] = useLocalStorage<Medication[]>('medications', []);
   const [appointments, setAppointments] = useLocalStorage<Appointment[]>('appointments', []);
   const [diaryEntries, setDiaryEntries] = useLocalStorage<DiaryEntry[]>('diaryEntries', []);
-  
-  const [healthTip, setHealthTip] = useState<string | null>(null);
-  const [isTipLoading, setIsTipLoading] = useState(false);
-  const [lastTipDate, setLastTipDate] = useLocalStorage<string | null>('lastTipDate', null);
   const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
   const [activeAlarms, setActiveAlarms] = useState<{meds: Medication[], appts: Appointment[]} | null>(null);
-  
+  const [lastCheckMinute, setLastCheckMinute] = useState<string>('');
+
   const wakeLockRef = useRef<any>(null);
 
   useEffect(() => {
@@ -36,7 +31,7 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Sincroniza o Service Worker sempre que a lista de remédios mudar
+  // 1. Sincroniza remédios com o Despertador do Sistema (Service Worker)
   useEffect(() => {
     if ('serviceWorker' in navigator && Notification.permission === 'granted') {
       navigator.serviceWorker.ready.then(reg => {
@@ -46,67 +41,71 @@ const App: React.FC = () => {
         });
       });
     }
-  }, [medications]);
+  }, [medications, notificationPermission]);
 
-  const requestWakeLock = async () => {
-    if ('wakeLock' in navigator) {
-      try { wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); } catch {}
-    }
-  };
-
-  const releaseWakeLock = () => {
-    if (wakeLockRef.current) { wakeLockRef.current.release(); wakeLockRef.current = null; }
-  };
-
-  // Overlay visual (quando app está aberto)
+  // 2. Monitor de tempo real para quando o APP está aberto
   useEffect(() => {
-    const checkMinute = () => {
-      if (document.visibilityState !== 'visible' || activeAlarms) return;
-      
+    const checkTime = () => {
       const now = new Date();
-      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      const medsNow = medications.filter(m => m.enabled && m.time === timeStr);
+      const currentMinute = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       
-      if (medsNow.length > 0) {
-        setActiveAlarms({ meds: medsNow, appts: [] });
+      if (currentMinute === lastCheckMinute) return;
+
+      const medsToTake = medications.filter(m => m.enabled && m.time === currentMinute);
+      
+      if (medsToTake.length > 0) {
+        setLastCheckMinute(currentMinute);
+        setActiveAlarms({ meds: medsToTake, appts: [] });
         startAlarmLoop();
-        requestWakeLock();
+        
+        // Mantém a tela ligada se possível
+        if ('wakeLock' in navigator) {
+          (navigator as any).wakeLock.request('screen').then((lock: any) => {
+            wakeLockRef.current = lock;
+          }).catch(() => {});
+        }
       }
     };
 
-    const interval = setInterval(checkMinute, 10000); // Checa a cada 10s
-    return () => clearInterval(interval);
-  }, [medications, activeAlarms]);
+    const timer = setInterval(checkTime, 1000);
+    return () => clearInterval(timer);
+  }, [medications, lastCheckMinute]);
 
   const handleDismissAlarm = () => {
     stopAlarmLoop();
-    releaseWakeLock();
     setActiveAlarms(null);
-  };
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'APPOINTMENTS': return <AppointmentList appointments={appointments} setAppointments={setAppointments} />;
-      case 'DIARY': return <Diary diaryEntries={diaryEntries} setDiaryEntries={setDiaryEntries} />;
-      case 'PROFILE': return <PatientProfile patient={patient} setPatient={setPatient} />;
-      case 'MESSAGE': return <MessagePage />;
-      case 'MEDS':
-      default: return <MedicationList medications={medications} setMedications={setMedications} />;
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release();
+      wakeLockRef.current = null;
     }
   };
-  
+
   if (showSplash) return <SplashScreen patient={patient} />;
 
   return (
-    <div className="flex flex-col h-screen font-sans bg-base-100 overflow-hidden">
+    <div className="flex flex-col h-screen font-sans bg-base-100 overflow-hidden text-neutral">
       <Header page={currentPage} patient={patient}/>
       <main className="flex-grow overflow-y-auto p-4 pb-24 relative">
-        {notificationPermission !== 'granted' && <NotificationPermission onPermissionUpdate={setNotificationPermission} />}
-        {renderPage()}
+        {notificationPermission !== 'granted' && (
+          <NotificationPermission onPermissionUpdate={setNotificationPermission} />
+        )}
+        
+        {currentPage === 'MEDS' && <MedicationList medications={medications} setMedications={setMedications} />}
+        {currentPage === 'APPOINTMENTS' && <AppointmentList appointments={appointments} setAppointments={setAppointments} />}
+        {currentPage === 'DIARY' && <Diary diaryEntries={diaryEntries} setDiaryEntries={setDiaryEntries} />}
+        {currentPage === 'PROFILE' && <PatientProfile patient={patient} setPatient={setPatient} />}
+        {currentPage === 'MESSAGE' && <MessagePage />}
       </main>
+      
       <BottomNav currentPage={currentPage} setCurrentPage={setCurrentPage} />
-      {healthTip && <HealthTipModal tip={healthTip} isLoading={isTipLoading} onClose={() => setHealthTip(null)} />}
-      {activeAlarms && <AlarmOverlay meds={activeAlarms.meds} appointments={activeAlarms.appts} onDismiss={handleDismissAlarm} />}
+      
+      {activeAlarms && (
+        <AlarmOverlay 
+          meds={activeAlarms.meds} 
+          appointments={activeAlarms.appts} 
+          onDismiss={handleDismissAlarm} 
+        />
+      )}
     </div>
   );
 };
