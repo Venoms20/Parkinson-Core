@@ -1,26 +1,18 @@
-
 {
-  "name": "Parkinson Care - Alarme Inteligente",
+  "name": "Parkinson Care",
   "short_name": "ParkinsonCare",
-  "description": "Gestão de medicamentos com alarmes persistentes para Parkinson.",
+  "description": "Controle inteligente de medicamentos para Parkinson",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#101828",
+  "background_color": "#0f172a",
   "theme_color": "#dc2626",
   "orientation": "portrait",
   "icons": [
     {
       "src": "/icon.svg",
-      "sizes": "any",
+      "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Meus Remédios",
-      "url": "/?page=MEDS",
-      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
     }
   ]
 }
