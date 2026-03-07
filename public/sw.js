@@ -1,36 +1,40 @@
-const CACHE_NAME = 'parkinson-care-v1';
+const CACHE_NAME = 'parkinson-care-v2'; // Mudei para v2 para forçar a atualização
 const urlsToCache = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/icon.svg',
-  '/icon-192.png',
-  '/icon-512.png'
+  '/manifest.json'
 ];
 
-// Instala o Service Worker e faz o cache dos arquivos iniciais
+// Instala o Service Worker de forma tolerante a erros
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Cache aberto com sucesso');
-        return cache.addAll(urlsToCache);
+        console.log('Tentando fazer cache dos arquivos essenciais...');
+        // Usa map e catch para que um arquivo ausente não quebre toda a instalação
+        return Promise.all(
+          urlsToCache.map(url => {
+            return cache.add(url).catch(err => {
+              console.warn(`[Service Worker] Falha ao fazer cache do arquivo: ${url}`, err);
+            });
+          })
+        );
       })
+      .then(() => self.skipWaiting()) // Força o SW a ativar imediatamente
   );
 });
 
-// Intercepta as requisições de rede e retorna do cache se estiver offline
+// Intercepta as requisições
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Retorna o cache se encontrar, senão faz a requisição na rede
         return response || fetch(event.request);
       })
   );
 });
 
-// Limpa caches antigos quando o Service Worker for atualizado
+// Limpa caches antigos
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
@@ -42,6 +46,6 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim()) // Assume o controle da página imediatamente
   );
 });
